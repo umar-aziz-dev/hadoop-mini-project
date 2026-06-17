@@ -1,0 +1,9 @@
+com/pdc/weather/StatsCalculationJob$StatsMapper.class
+com/pdc/weather/AnomalyDetectionJob$AnomalyMapper$Stats.class
+com/pdc/weather/StatsCalculationJob$StatsCombiner.class
+com/pdc/weather/DoubleSummaryWritable.class
+com/pdc/weather/WeatherDriver.class
+com/pdc/weather/StatsCalculationJob.class
+com/pdc/weather/AnomalyDetectionJob$AnomalyMapper.class
+com/pdc/weather/StatsCalculationJob$StatsReducer.class
+com/pdc/weather/AnomalyDetectionJob.class
