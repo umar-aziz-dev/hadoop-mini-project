@@ -10,9 +10,15 @@ import java.util.List;
 
 public class StatsCalculationJob {
 
+    // StatsMapper => 
+        // Reads one CSV row
+        // Extracts Station ID (column 0) and Temperature (column 6)
+        // Skips header rows and missing values (9999.9 = NOAA code for "no reading")
+        // Emits: StationID → {sum=temp, sumOfSquares=temp², count=1}
+
     public static class StatsMapper extends Mapper<LongWritable, Text, Text, DoubleSummaryWritable> {
         private final Text stationKey = new Text();
-        private final DoubleSummaryWritable outValue = new DoubleSummaryWritable();
+        private final DoubleSummaryWritable outValue = new DoubleSummaryWritable(); // Custom writable to hold sum, sum of squares, and count
 
         @Override
         protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
@@ -37,7 +43,7 @@ public class StatsCalculationJob {
                     stationKey.set(station);
                     outValue.setSum(temp);
                     outValue.setSumOfSquares(temp * temp);
-                    outValue.setCount(1L);
+                    outValue.setCount(1L); // 1L => count of one observation
 
                     context.write(stationKey, outValue);
                 } catch (NumberFormatException e) {
@@ -47,6 +53,11 @@ public class StatsCalculationJob {
         }
     }
 
+    // StatsCombiner =>
+        // Runs locally on each machine before data is sent over the network
+        // Pre-adds partial sums together
+        // Reduces network traffic dramatically
+        // Think of it as a "local mini-reducer"
     public static class StatsCombiner extends Reducer<Text, DoubleSummaryWritable, Text, DoubleSummaryWritable> {
         private final DoubleSummaryWritable combinedValue = new DoubleSummaryWritable();
 
@@ -70,6 +81,12 @@ public class StatsCalculationJob {
             context.write(key, combinedValue);
         }
     }
+
+    // StatsReducer =>
+        // Receives all partial sums for one station from ALL machines
+        // Adds them all up
+        // Applies the formula → computes mean and sigma
+        // Writes: 72530094846\t49.93,21.76
 
     public static class StatsReducer extends Reducer<Text, DoubleSummaryWritable, Text, Text> {
         private final Text outValue = new Text();

@@ -13,6 +13,15 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
+// Sets up Stage 1 job configuration
+// Submits Stage 1 to Hadoop
+// Waits for Stage 1 to finish
+// Takes Stage 1 output, puts it in Distributed Cache
+// Sets up Stage 2 job configuration
+// Submits Stage 2 to Hadoop
+// Waits for Stage 2 to finish
+// Reports success or failure
+
 public class WeatherDriver extends Configured implements Tool {
 
     @Override
