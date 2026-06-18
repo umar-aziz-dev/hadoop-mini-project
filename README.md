@@ -3,6 +3,33 @@
 
 This repository contains the complete implementation and documentation for Group PDC mini-project: **Global Weather Anomaly Detection**. The project calculates a 10-year baseline mean and standard deviation ($\sigma$) per weather station using the NOAA Global Surface Summary of the Day (GSOD) dataset, and detects extreme weather events (anomaly days) where temperatures deviate by more than $3\sigma$.
 
+> **Primary focus: running on a local machine.**
+> You do **NOT** need Maven. You do **NOT** need Spark. You only need **Java + Hadoop + Python**.
+
+---
+
+## Quick Start (Local Machine)
+
+If you just want to run the project right now, follow these 3 steps:
+
+**Step 1 — Install the two required tools** (if not already installed):
+```bash
+brew install openjdk@17
+brew install hadoop
+```
+
+**Step 2 — Go into the project folder:**
+```bash
+cd pdc_project
+```
+
+**Step 3 — Run:**
+```bash
+bash run_local.sh
+```
+
+That's it. Results will be printed in the terminal. For a detailed setup guide, see [SETUP.md](SETUP.md).
+
 ---
 
 ## 0. Project Overview
@@ -247,51 +274,83 @@ worker-node2
 
 ---
 
-### 3.4 Spark Installation & Environment Configuration
-While the primary framework for this project is Hadoop MapReduce, the assignment manual requires manual installation of Spark on all cluster nodes.
+### 3.4 Spark — Not Required for Local Mode
 
-1. Download Apache Spark (e.g., Spark 3.5.x pre-built for Hadoop 3) on all machines and extract to `/usr/local/spark`.
-2. Add Spark env variables to `~/.bashrc`:
-   ```bash
-   export SPARK_HOME=/usr/local/spark
-   export PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
-   ```
-3. Copy Spark configuration template:
-   ```bash
-   cp $SPARK_HOME/conf/spark-env.sh.template $SPARK_HOME/conf/spark-env.sh
-   ```
-4. Edit `$SPARK_HOME/conf/spark-env.sh` and specify variables:
-   ```bash
-   export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-   export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
-   export SPARK_MASTER_HOST='master-node'
-   export SPARK_LOCAL_IP='192.168.1.100'  # Node's local IP address
-   ```
-5. Edit `$SPARK_HOME/conf/workers` and add:
-   ```text
-   worker-node1
-   worker-node2
-   ```
+> **Spark is NOT needed to run this project locally.** This project uses only Hadoop MapReduce.
+>
+> Spark installation is only required if your assignment specifically asks for a multi-framework cluster demo. For local machine use, skip this section entirely.
 
 ---
 
 ## 4. How to Run & Verify
 
-### 4.1 Running Locally (Standalone Mode Simulation)
-You can test the entire pipeline locally without setting up HDFS or YARN. Standalone Hadoop uses your local file system.
+### 4.1 Running Locally ✅ (Recommended — No Maven, No Spark, No HDFS needed)
 
-1. Ensure **Maven** and **Java** are installed and configured.
-2. Run the provided script:
-   - **On Windows**: Double click [run_local.bat](file:///d:/8th/pdc/project/run_local.bat) or run in CMD:
-     ```cmd
-     run_local.bat
-     ```
-   - **On Unix/Linux**: Run:
-     ```bash
-     chmod +x run_local.sh
-     ./run_local.sh
-     ```
-3. The scripts automatically compile the Java code, generate a 10-year weather CSV dataset (`sample_data.csv`), execute Stage 1 and Stage 2 MapReduce jobs, and print the results to the console.
+You only need **Java 17** and **Hadoop** installed. The pre-built JAR is already in `target/` so no compilation is needed.
+
+**Run command (macOS / Linux):**
+```bash
+cd pdc_project
+bash run_local.sh
+```
+
+**Run command (Windows):**
+```cmd
+run_local.bat
+```
+
+---
+
+#### What `run_local.sh` Does — Step by Step
+
+When you run `bash run_local.sh`, here is exactly what happens internally:
+
+**Step 1 — Checks Hadoop is installed**
+```bash
+if ! command -v hadoop → exits with error if Hadoop not found
+```
+If Hadoop is missing, it prints `[ERROR] Hadoop is not installed` and stops.
+
+**Step 2 — Checks the pre-built JAR exists**
+```bash
+if [ ! -f target/weather-anomaly-detector-1.0-SNAPSHOT.jar ]
+```
+The JAR is already included in the project. If somehow missing, it tells you to rebuild with Maven.
+
+**Step 3 — Generates the dataset (only if missing)**
+```bash
+if [ ! -f sample_data.csv ] → runs python3 generate_sample_data.py
+```
+Calls the Python script to create `sample_data.csv` — a 10-year synthetic weather dataset (~10,960 rows) for 3 airports. If `sample_data.csv` already exists, this step is skipped.
+
+**Step 4 — Clears old output folders**
+```bash
+rm -rf stage1_output stage2_output
+```
+Deletes results from any previous run so Hadoop doesn't complain about existing output directories.
+
+**Step 5 — Runs the MapReduce pipeline**
+```bash
+hadoop jar target/weather-anomaly-detector-1.0-SNAPSHOT.jar \
+    -Dfs.defaultFS=file:///            ← use local files (not HDFS)
+    -Dmapreduce.framework.name=local   ← run locally (not on YARN cluster)
+    sample_data.csv stage1_output stage2_output
+```
+This is the main command. It runs both Stage 1 and Stage 2 MapReduce jobs using your local filesystem. No HDFS, no YARN, no cluster needed.
+
+**Step 6 — Prints Stage 1 results**
+```bash
+cat stage1_output/part-r-00000
+```
+Prints the baseline statistics (mean temperature + sigma) for each of the 3 stations.
+
+**Step 7 — Prints Stage 2 results**
+```bash
+cat stage2_output/part-m-00000
+```
+Prints the detected anomaly days — every row where temperature exceeded 3σ from normal.
+
+---
 
 ### 4.2 Running on the Physical Distributed Cluster
 
@@ -433,19 +492,7 @@ hadoop jar weather-anomaly-detector.jar <input> <stage1_out> <stage2_out> [year]
 
 ## 5. Understanding the Output
 
-### 5.1 How to Run Locally (No Maven Required)
-
-Hadoop is already sufficient to run the pre-built JAR. No Maven needed:
-
-```bash
-bash run_local.sh
-```
-
-The script will automatically generate `sample_data.csv`, run both MapReduce stages, and print results.
-
----
-
-### 5.2 The Three Weather Stations
+### 5.1 The Three Weather Stations
 
 The sample dataset covers 10 years of daily temperature data for three US airports:
 

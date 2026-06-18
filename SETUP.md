@@ -8,16 +8,31 @@
 
 ---
 
+## Before You Start — What Do You Actually Need?
+
+| Goal | Tools Required | Steps to Follow |
+|---|---|---|
+| **Run on local machine** ✅ (recommended) | Java 17, Hadoop, Python 3 | Steps 1–4, then Steps 9–11 |
+| Run on HDFS/YARN (full cluster mode) | All of the above + SSH setup | All steps 1–11 |
+
+> **Maven is NOT required.** The pre-built JAR is already included in `target/`.
+> **Spark is NOT required.** This project uses only Hadoop MapReduce.
+
+**Estimated time (local mode only):** 15–20 minutes
+
+---
+
 ## What You Will Install
 
-| Tool | Purpose |
-|---|---|
-| Homebrew | Package manager — installs everything else |
-| Java 17 (OpenJDK) | Required to run Hadoop and the MapReduce jobs |
-| Apache Hadoop 3.5.0 | Runs the MapReduce pipeline |
-| Python 3 | Generates the sample weather dataset |
+| Tool | Purpose | Required for local mode? |
+|---|---|---|
+| Homebrew | Package manager — installs everything else | Yes |
+| Java 17 (OpenJDK) | Required to run Hadoop and the MapReduce jobs | Yes |
+| Apache Hadoop 3.5.0 | Runs the MapReduce pipeline | Yes |
+| Python 3 | Generates the sample weather dataset | Yes |
+| SSH setup + HDFS format | Needed only for full cluster/YARN mode | **No — skip for local** |
 
-**Estimated time:** 30–45 minutes (depending on internet speed)
+**Estimated time (full setup):** 30–45 minutes (depending on internet speed)
 
 ---
 
@@ -101,6 +116,15 @@ Find where Hadoop was installed:
 brew info hadoop
 # Installed at: /usr/local/opt/hadoop/libexec
 ```
+
+---
+
+## Steps 5–8 — Hadoop Configuration, SSH & HDFS
+
+> **For local machine use — you can skip Steps 5 through 8 entirely.**
+> The `run_local.sh` script overrides Hadoop settings at runtime to use your local filesystem directly, so no HDFS or YARN configuration is needed.
+>
+> Only follow Steps 5–8 if you want to run the project on a real HDFS/YARN cluster.
 
 ---
 
@@ -341,12 +365,38 @@ cd pdc_project
 bash run_local.sh
 ```
 
-The script will automatically:
-1. Check that Hadoop is available
-2. Generate `sample_data.csv` (10 years of weather data for 3 airports)
-3. Run **Stage 1** — calculates mean temperature and sigma per station
-4. Run **Stage 2** — detects days with extreme temperature anomalies
-5. Print the results to the console
+---
+
+### What `run_local.sh` Does Internally — Step by Step
+
+You don't need to understand this to run it, but here is exactly what happens when you execute the script:
+
+**1. Checks Hadoop is installed**
+If `hadoop` command is not found it stops immediately with an error.
+
+**2. Checks the pre-built JAR exists**
+Looks for `target/weather-anomaly-detector-1.0-SNAPSHOT.jar`. This JAR is already included — no compilation needed.
+
+**3. Generates the dataset (only if `sample_data.csv` is missing)**
+Runs `python3 generate_sample_data.py` to create ~10,960 rows of synthetic weather data across 3 airports over 10 years (2016–2025). If the file already exists, this step is skipped.
+
+**4. Deletes old output folders**
+Removes `stage1_output/` and `stage2_output/` from any previous run so Hadoop does not complain about existing directories.
+
+**5. Runs the MapReduce pipeline**
+```bash
+hadoop jar target/weather-anomaly-detector-1.0-SNAPSHOT.jar \
+    -Dfs.defaultFS=file:///            ← use local files, not HDFS
+    -Dmapreduce.framework.name=local   ← run locally, not on YARN
+    sample_data.csv stage1_output stage2_output
+```
+This single command runs both Stage 1 (baseline stats) and Stage 2 (anomaly detection) on your local machine with no cluster needed.
+
+**6. Prints Stage 1 results**
+Reads and prints `stage1_output/part-r-00000` — the mean temperature and sigma for each station.
+
+**7. Prints Stage 2 results**
+Reads and prints `stage2_output/part-m-00000` — every day that was flagged as an extreme weather anomaly.
 
 ---
 
@@ -418,5 +468,5 @@ start-all.sh
 | Only 3–4 services in `jps` | Run `stop-all.sh`, wait 10 seconds, then run `start-all.sh` again |
 | Web UI not loading | Run `jps` — if NameNode is missing, run `start-dfs.sh` |
 | Port 9000 already in use | Run `kill -9 $(lsof -ti :9000)` then run `start-all.sh` |
-| `JAR not found` | Rebuild with `brew install maven && mvn clean package` |
+| `JAR not found` | The pre-built JAR should be in `target/`. If missing, rebuild: `brew install maven && mvn clean package` |
 | Permission denied on `run_local.sh` | Run `chmod +x run_local.sh` first |
